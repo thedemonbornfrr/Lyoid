@@ -1,0 +1,1416 @@
+wait(1)
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+local RunService = game:GetService("RunService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Workspace = game:GetService("Workspace")
+local TeleportService = game:GetService("TeleportService")
+local HttpService = game:GetService("HttpService")
+local StarterGui = game:GetService("StarterGui")
+local Lighting = game:GetService("Lighting")
+local SoundService = game:GetService("SoundService")
+
+local player = Players.LocalPlayer
+
+local REQUIRED_KEY = "brainrot"
+local SCRIPT_VERSION = "5.01"
+local SAVE_KEY = "SilentHub_SavedKey_" .. player.UserId
+local SAVE_TIMER_KEY = "SilentHub_KeyTimer_" .. player.UserId
+local SAVE_VERSION_KEY = "SilentHub_Version_" .. player.UserId
+
+local keyAttempts = 0
+local maxAttempts = 5
+local bannedUsers = {}
+local currentUsers = 127
+local discordMembers = 2847
+local blockedUsers = {}
+
+local isMobile = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
+
+-- Plants vs Brainrots Settings
+local settings = {
+    -- Planting & Farming
+    autoPlant = false,
+    autoHarvest = false,
+    autoBuySeeds = false,
+    selectedSeed = "Peashooter",
+    plantingSpeed = 0.5,
+    priorityPlant = true,
+    
+    -- Brainrot Management
+    autoCollectBrainrots = false,
+    autoPlaceBrainrots = false,
+    autoSellBrainrots = false,
+    brainrotPriority = "Highest Value",
+    maxBrainrotsInBase = 50,
+    
+    -- Fuse Machine
+    autoFuse = false,
+    fuseMode = "All",
+    keepMutations = true,
+    
+    -- Economy
+    autoSpendCash = false,
+    minCashReserve = 1000,
+    priorityBuying = "Seeds",
+    
+    -- Garden Management
+    autoExpandGarden = false,
+    gardenLayout = "Optimal",
+    autoUpgradePlants = false,
+    
+    -- Mutations
+    mutationFarming = false,
+    onlyKeepMutated = false,
+    mutationPriority = "Golden",
+    
+    -- Eggs & Rebirth
+    autoOpenEggs = false,
+    eggType = "Common Egg",
+    autoRebirth = false,
+    rebirthThreshold = 100,
+    
+    -- General
+    antiAFK = false,
+    autoClicker = false,
+    clickSpeed = 20,
+    walkSpeed = 16,
+    jumpPower = 50,
+    noClip = false,
+    flyHack = false
+}
+
+local connections = {}
+local currentTween = nil
+local noclipEnabled = false
+local speedLoop = nil
+local flyEnabled = false
+local autoPlantRunning = false
+local autoHarvestRunning = false
+local autoCollectRunning = false
+local autoFuseRunning = false
+
+-- Plant Types and Seeds
+local PLANT_SEEDS = {
+    "Peashooter", "Sunflower", "Cherry Bomb", "Wall-nut", "Potato Mine",
+    "Snow Pea", "Chomper", "Repeater", "Puff-shroom", "Sun-shroom",
+    "Fume-shroom", "Grave Buster", "Hypno-shroom", "Scaredy-shroom",
+    "Ice-shroom", "Doom-shroom", "Lily Pad", "Squash", "Threepeater",
+    "Tangle Kelp", "Jalapeno", "Spikeweed", "Torchwood", "Tall-nut",
+    "Sea-shroom", "Plantern", "Cactus", "Blover", "Split Pea",
+    "Starfruit", "Pumpkin", "Magnet-shroom", "Cabbage-pult", "Flower Pot",
+    "Kernel-pult", "Coffee Bean", "Garlic", "Umbrella Leaf", "Marigold",
+    "Melon-pult"
+}
+
+-- Brainrot Types
+local BRAINROT_TYPES = {
+    "Skibidi", "Ohio", "Sigma", "Rizz", "Gyat", "Fanum Tax", "Baby Gronk",
+    "Kai Cenat", "Duke Dennis", "IShowSpeed", "Grimace Shake", "Among Us",
+    "Sus", "Imposter", "Sussy Baka", "Gigachad", "Chad", "Beta", "Alpha",
+    "Ligma", "Sugma", "Candice", "Joe Mama", "Deez Nuts", "Bofa",
+    "Updog", "Henway", "Sawcon", "Fugma", "Wilma", "Kenya", "Mike Oxlong",
+    "Hugh Jass", "Ben Dover", "Al Coholic", "Anita Bath", "Barry McCockiner",
+    "Cringe", "Based", "Ratio", "L + Ratio", "Cope", "Seethe", "Mald",
+    "Touch Grass", "No Maidens", "Maidenless", "Bitchless", "Get Real",
+    "Skill Issue", "Imagine", "Couldn't Be Me"
+}
+
+-- Mutation Types
+local MUTATIONS = {
+    "Golden", "Rainbow", "Shadow", "Crystal"
+}
+
+-- Egg Types
+local EGG_TYPES = {
+    "Common Egg", "Uncommon Egg", "Rare Egg", "Epic Egg", "Legendary Egg", "Meme Egg"
+}
+
+local function createNewLoadingScreen()
+    local blur = Instance.new("BlurEffect", Lighting)
+    blur.Size = 0
+    TweenService:Create(blur, TweenInfo.new(0.5), {Size = 24}):Play()
+
+    local screenGui = Instance.new("ScreenGui", player:WaitForChild("PlayerGui"))
+    screenGui.Name = "SilentHubIntro"
+    screenGui.ResetOnSpawn = false
+    screenGui.IgnoreGuiInset = true
+
+    local frame = Instance.new("Frame", screenGui)
+    frame.Size = UDim2.new(1, 0, 1, 0)
+    frame.BackgroundTransparency = 1
+
+    local bg = Instance.new("Frame", frame)
+    bg.Size = UDim2.new(1, 0, 1, 0)
+    bg.BackgroundColor3 = Color3.fromRGB(40, 0, 60)
+    bg.BackgroundTransparency = 1
+    bg.ZIndex = 0
+    TweenService:Create(bg, TweenInfo.new(0.5), {BackgroundTransparency = 0.3}):Play()
+
+    local logo = Instance.new("ImageLabel", frame)
+    logo.Image = "rbxassetid://18793032501"
+    logo.Size = UDim2.new(0, 150, 0, 150)
+    logo.Position = UDim2.new(0.5, 0, 0.3, 0)
+    logo.AnchorPoint = Vector2.new(0.5, 0.5)
+    logo.BackgroundTransparency = 1
+    logo.ImageTransparency = 1
+    logo.Rotation = 0
+
+    TweenService:Create(logo, TweenInfo.new(0.5, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+        ImageTransparency = 0,
+        Size = UDim2.new(0, 200, 0, 200),
+        Rotation = 15
+    }):Play()
+
+    task.delay(0.5, function()
+        TweenService:Create(logo, TweenInfo.new(0.5, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+            Size = UDim2.new(0, 150, 0, 150),
+            Rotation = 0
+        }):Play()
+    end)
+
+    local word = "Silent Hub"
+    local letters = {}
+
+    local function tweenOutAndDestroy()
+        for _, label in ipairs(letters) do
+            TweenService:Create(label, TweenInfo.new(0.3), {TextTransparency = 1, TextSize = 20}):Play()
+        end
+        TweenService:Create(bg, TweenInfo.new(0.5), {BackgroundTransparency = 1}):Play()
+        TweenService:Create(blur, TweenInfo.new(0.5), {Size = 0}):Play()
+        TweenService:Create(logo, TweenInfo.new(0.5), {ImageTransparency = 1}):Play()
+        wait(0.6)
+        screenGui:Destroy()
+        blur:Destroy()
+    end
+
+    task.wait(1) 
+
+    for i = 1, #word do
+        local char = word:sub(i, i)
+        local label = Instance.new("TextLabel")
+        label.Text = char
+        label.Font = Enum.Font.GothamBlack
+        label.TextColor3 = Color3.new(1, 1, 1)
+        label.TextStrokeTransparency = 1
+        label.TextTransparency = 1
+        label.TextScaled = false
+        label.TextSize = 30
+        label.Size = UDim2.new(0, 60, 0, 60)
+        label.AnchorPoint = Vector2.new(0.5, 0.5)
+        label.Position = UDim2.new(0.5, (i - (#word / 2 + 0.5)) * 65, 0.6, 0)
+        label.BackgroundTransparency = 1
+        label.Parent = frame
+
+        local gradient = Instance.new("UIGradient")
+        gradient.Color = ColorSequence.new({
+            ColorSequenceKeypoint.new(0, Color3.fromRGB(180, 0, 255)),
+            ColorSequenceKeypoint.new(1, Color3.fromRGB(100, 0, 180))
+        })
+        gradient.Rotation = 90
+        gradient.Parent = label
+
+        local tweenIn = TweenService:Create(label, TweenInfo.new(0.3), {TextTransparency = 0, TextSize = 60})
+        tweenIn:Play()
+
+        table.insert(letters, label)
+        wait(0.25)
+    end
+
+    wait(2.5)
+    tweenOutAndDestroy()
+    wait(1)
+end
+
+-- Utility Functions
+local function showNotification(text)
+    StarterGui:SetCore("SendNotification", {
+        Title = "Silent Hub - Plants vs Brainrots";
+        Text = text;
+        Duration = 3;
+        Icon = "rbxassetid://18793032501";
+    })
+end
+
+local function isKeySaved()
+    if not (isfile and readfile and writefile) then return false end
+    local keyFile = SAVE_KEY .. ".txt"
+    local timerFile = SAVE_TIMER_KEY .. ".txt"
+    local versionFile = SAVE_VERSION_KEY .. ".txt"
+    
+    if isfile(keyFile) and isfile(timerFile) and isfile(versionFile) then
+        local savedKey = readfile(keyFile)
+        local savedTimer = tonumber(readfile(timerFile)) or 0
+        local savedVersion = readfile(versionFile)
+        
+        if savedKey == REQUIRED_KEY and tick() < savedTimer and savedVersion == SCRIPT_VERSION then
+            return true
+        else
+            if isfile(keyFile) then delfile(keyFile) end
+            if isfile(timerFile) then delfile(timerFile) end
+            if isfile(versionFile) then delfile(versionFile) end
+        end
+    end
+    return false
+end
+
+local function saveKey()
+    if not writefile then return end
+    local randomTime = math.random(45 * 60, 60 * 60)
+    local expireTime = tick() + randomTime
+    writefile(SAVE_KEY .. ".txt", REQUIRED_KEY)
+    writefile(SAVE_TIMER_KEY .. ".txt", tostring(expireTime))
+    writefile(SAVE_VERSION_KEY .. ".txt", SCRIPT_VERSION)
+end
+
+-- Plants vs Brainrots Functions
+local function autoPlant()
+    spawn(function()
+        autoPlantRunning = true
+        while settings.autoPlant and autoPlantRunning do
+            pcall(function()
+                -- Find empty garden plots
+                for _, plot in pairs(workspace:GetDescendants()) do
+                    if plot.Name:lower():find("plot") or plot.Name:lower():find("garden") then
+                        if plot:FindFirstChild("ClickDetector") and not plot:FindFirstChild("Plant") then
+                            -- Buy and plant seed
+                            for _, remote in pairs(ReplicatedStorage:GetDescendants()) do
+                                if remote:IsA("RemoteEvent") then
+                                    pcall(function()
+                                        remote:FireServer("BuySeed", settings.selectedSeed)
+                                        remote:FireServer("PlantSeed", settings.selectedSeed, plot)
+                                        remote:FireServer("Plant", plot, settings.selectedSeed)
+                                    end)
+                                end
+                            end
+                            wait(settings.plantingSpeed)
+                        end
+                    end
+                end
+            end)
+            wait(1)
+        end
+        autoPlantRunning = false
+    end)
+end
+
+local function autoHarvest()
+    spawn(function()
+        autoHarvestRunning = true
+        while settings.autoHarvest and autoHarvestRunning do
+            pcall(function()
+                -- Harvest mature plants
+                for _, plant in pairs(workspace:GetDescendants()) do
+                    if plant.Name:lower():find("plant") and plant:FindFirstChild("Mature") then
+                        for _, remote in pairs(ReplicatedStorage:GetDescendants()) do
+                            if remote:IsA("RemoteEvent") then
+                                pcall(function()
+                                    remote:FireServer("Harvest", plant)
+                                    remote:FireServer("CollectPlant", plant)
+                                end)
+                            end
+                        end
+                    end
+                end
+            end)
+            wait(2)
+        end
+        autoHarvestRunning = false
+    end)
+end
+
+local function autoCollectBrainrots()
+    spawn(function()
+        autoCollectRunning = true
+        while settings.autoCollectBrainrots and autoCollectRunning do
+            pcall(function()
+                -- Collect defeated brainrots
+                for _, brainrot in pairs(workspace:GetDescendants()) do
+                    if brainrot.Name:lower():find("brainrot") and brainrot:FindFirstChild("Defeated") then
+                        for _, remote in pairs(ReplicatedStorage:GetDescendants()) do
+                            if remote:IsA("RemoteEvent") then
+                                pcall(function()
+                                    remote:FireServer("CollectBrainrot", brainrot)
+                                    remote:FireServer("PickupBrainrot", brainrot)
+                                    remote:FireServer("AddToInventory", brainrot)
+                                end)
+                            end
+                        end
+                    end
+                end
+            end)
+            wait(1)
+        end
+        autoCollectRunning = false
+    end)
+end
+
+local function autoPlaceBrainrots()
+    spawn(function()
+        while settings.autoPlaceBrainrots do
+            pcall(function()
+                -- Place brainrots in base for income generation
+                local brainrotCount = 0
+                for _, baseSlot in pairs(workspace:GetDescendants()) do
+                    if baseSlot.Name:lower():find("base") or baseSlot.Name:lower():find("income") then
+                        if brainrotCount < settings.maxBrainrotsInBase then
+                            for _, remote in pairs(ReplicatedStorage:GetDescendants()) do
+                                if remote:IsA("RemoteEvent") then
+                                    pcall(function()
+                                        remote:FireServer("PlaceBrainrot", baseSlot)
+                                        remote:FireServer("SetupIncome", baseSlot)
+                                        brainrotCount = brainrotCount + 1
+                                    end)
+                                end
+                            end
+                        end
+                    end
+                end
+            end)
+            wait(3)
+        end
+    end)
+end
+
+local function autoFuse()
+    spawn(function()
+        autoFuseRunning = true
+        while settings.autoFuse and autoFuseRunning do
+            pcall(function()
+                -- Use fuse machine to create better brainrots
+                local fuseMachine = workspace:FindFirstChild("FuseMachine") or workspace:FindFirstChild("Fuse")
+                if fuseMachine then
+                    for _, remote in pairs(ReplicatedStorage:GetDescendants()) do
+                        if remote:IsA("RemoteEvent") then
+                            pcall(function()
+                                remote:FireServer("OpenFuseMachine")
+                                remote:FireServer("FusePlants")
+                                remote:FireServer("FuseBrainrots")
+                                remote:FireServer("CreateFusion")
+                                remote:FireServer("Fuse", settings.fuseMode)
+                            end)
+                        end
+                    end
+                end
+            end)
+            wait(5)
+        end
+        autoFuseRunning = false
+    end)
+end
+
+local function autoOpenEggs()
+    spawn(function()
+        while settings.autoOpenEggs do
+            pcall(function()
+                for _, remote in pairs(ReplicatedStorage:GetDescendants()) do
+                    if remote:IsA("RemoteEvent") then
+                        pcall(function()
+                            remote:FireServer("BuyEgg", settings.eggType)
+                            remote:FireServer("OpenEgg", settings.eggType)
+                            remote:FireServer("HatchEgg", settings.eggType)
+                        end)
+                    end
+                end
+            end)
+            wait(2)
+        end
+    end)
+end
+
+local function autoSpendCash()
+    spawn(function()
+        while settings.autoSpendCash do
+            pcall(function()
+                for _, remote in pairs(ReplicatedStorage:GetDescendants()) do
+                    if remote:IsA("RemoteEvent") then
+                        pcall(function()
+                            if settings.priorityBuying == "Seeds" then
+                                remote:FireServer("BuySeed", settings.selectedSeed)
+                            elseif settings.priorityBuying == "Upgrades" then
+                                remote:FireServer("UpgradePlant")
+                                remote:FireServer("BuyUpgrade")
+                            elseif settings.priorityBuying == "Eggs" then
+                                remote:FireServer("BuyEgg", settings.eggType)
+                            end
+                        end)
+                    end
+                end
+            end)
+            wait(3)
+        end
+    end)
+end
+
+local function autoRebirth()
+    spawn(function()
+        while settings.autoRebirth do
+            pcall(function()
+                for _, remote in pairs(ReplicatedStorage:GetDescendants()) do
+                    if remote:IsA("RemoteEvent") then
+                        pcall(function()
+                            remote:FireServer("Rebirth")
+                            remote:FireServer("ResetProgress")
+                            remote:FireServer("StartNewGame")
+                        end)
+                    end
+                end
+            end)
+            wait(10)
+        end
+    end)
+end
+
+local function mutationFarming()
+    spawn(function()
+        while settings.mutationFarming do
+            pcall(function()
+                -- Focus on getting mutations
+                for _, plant in pairs(workspace:GetDescendants()) do
+                    if plant.Name:lower():find("plant") then
+                        if settings.onlyKeepMutated and not plant:FindFirstChild("Mutation") then
+                            -- Sell non-mutated plants
+                            for _, remote in pairs(ReplicatedStorage:GetDescendants()) do
+                                if remote:IsA("RemoteEvent") then
+                                    pcall(function()
+                                        remote:FireServer("SellPlant", plant)
+                                    end)
+                                end
+                            end
+                        end
+                    end
+                end
+            end)
+            wait(2)
+        end
+    end)
+end
+
+local function autoClicker()
+    connections.autoClicker = RunService.Heartbeat:Connect(function()
+        if settings.autoClicker then
+            pcall(function()
+                for _, clickable in pairs(workspace:GetDescendants()) do
+                    if clickable:FindFirstChild("ClickDetector") then
+                        fireclickdetector(clickable.ClickDetector)
+                    end
+                end
+            end)
+        end
+    end)
+end
+
+local function antiAFK()
+    connections.antiAFK = RunService.Heartbeat:Connect(function()
+        if settings.antiAFK then
+            pcall(function()
+                game:GetService("VirtualUser"):CaptureController()
+                game:GetService("VirtualUser"):ClickButton2(Vector2.new())
+                game:GetService("Players").LocalPlayer.Idled:Connect(function()
+                    game:GetService("VirtualUser"):Button2Down(Vector2.new(0,0),workspace.CurrentCamera.CFrame)
+                    wait(1)
+                    game:GetService("VirtualUser"):Button2Up(Vector2.new(0,0),workspace.CurrentCamera.CFrame)
+                end)
+            end)
+        end
+    end)
+end
+
+local function enableFly()
+    if flyEnabled or not player.Character or not player.Character:FindFirstChild("HumanoidRootPart") then return end
+    flyEnabled = true
+    
+    local humanoidRootPart = player.Character.HumanoidRootPart
+    local bodyVelocity = Instance.new("BodyVelocity")
+    bodyVelocity.MaxForce = Vector3.new(9e9, 9e9, 9e9)
+    bodyVelocity.Velocity = Vector3.new(0, 0, 0)
+    bodyVelocity.Parent = humanoidRootPart
+    
+    connections.fly = RunService.Heartbeat:Connect(function()
+        if flyEnabled and player.Character and player.Character:FindFirstChild("HumanoidRootPart") and bodyVelocity then
+            local camera = workspace.CurrentCamera
+            local moveVector = Vector3.new(0, 0, 0)
+            
+            if UserInputService:IsKeyDown(Enum.KeyCode.W) then
+                moveVector = moveVector + camera.CFrame.LookVector
+            end
+            if UserInputService:IsKeyDown(Enum.KeyCode.S) then
+                moveVector = moveVector - camera.CFrame.LookVector
+            end
+            if UserInputService:IsKeyDown(Enum.KeyCode.A) then
+                moveVector = moveVector - camera.CFrame.RightVector
+            end
+            if UserInputService:IsKeyDown(Enum.KeyCode.D) then
+                moveVector = moveVector + camera.CFrame.RightVector
+            end
+            if UserInputService:IsKeyDown(Enum.KeyCode.Space) then
+                moveVector = moveVector + Vector3.new(0, 1, 0)
+            end
+            if UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) then
+                moveVector = moveVector + Vector3.new(0, -1, 0)
+            end
+            
+            bodyVelocity.Velocity = moveVector.Unit * 50
+            if moveVector.Magnitude == 0 then
+                bodyVelocity.Velocity = Vector3.new(0, 0, 0)
+            end
+        end
+    end)
+end
+
+local function disableFly()
+    if not flyEnabled then return end
+    flyEnabled = false
+    
+    if connections.fly then
+        connections.fly:Disconnect()
+        connections.fly = nil
+    end
+    
+    if player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+        for _, obj in pairs(player.Character.HumanoidRootPart:GetChildren()) do
+            if obj:IsA("BodyVelocity") then
+                obj:Destroy()
+            end
+        end
+    end
+end
+
+local function enableNoClip()
+    if noclipEnabled then return end
+    noclipEnabled = true
+    connections.noclip = RunService.Stepped:Connect(function()
+        if player.Character then
+            for _, part in pairs(player.Character:GetDescendants()) do
+                if part:IsA("BasePart") and part.CanCollide then
+                    part.CanCollide = false
+                end
+            end
+        end
+    end)
+end
+
+local function disableNoClip()
+    if not noclipEnabled then return end
+    noclipEnabled = false
+    if connections.noclip then
+        connections.noclip:Disconnect()
+        connections.noclip = nil
+    end
+    if player.Character then
+        for _, part in pairs(player.Character:GetDescendants()) do
+            if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" then
+                part.CanCollide = true
+            end
+        end
+    end
+end
+
+local function startSpeedLoop()
+    if speedLoop then speedLoop:Disconnect() end
+    speedLoop = RunService.Heartbeat:Connect(function()
+        if player.Character then
+            local humanoid = player.Character:FindFirstChild("Humanoid")
+            if humanoid then
+                humanoid.WalkSpeed = settings.walkSpeed
+                humanoid.JumpHeight = settings.jumpPower
+            end
+        end
+    end)
+end
+
+local function playSuccessSound()
+    pcall(function()
+        local sound = Instance.new("Sound")
+        sound.SoundId = "rbxassetid://131961136"
+        sound.Volume = 0.5
+        sound.Parent = SoundService
+        sound:Play()
+        sound.Ended:Connect(function()
+            sound:Destroy()
+        end)
+    end)
+end
+
+-- Main Hub Creation
+local function createMainHub()
+    createNewLoadingScreen()
+    
+    local success, WindUI = pcall(function()
+        return loadstring(game:HttpGet("https://raw.githubusercontent.com/Footagesus/WindUI/main/main.lua"))()
+    end)
+    
+    if not success then
+        success, WindUI = pcall(function()
+            return loadstring(game:HttpGet("https://github.com/Footagesus/WindUI/releases/latest/download/main.lua"))()
+        end)
+    end
+    
+    if not success then 
+        showNotification("Failed to load UI library!")
+        return 
+    end
+
+    local Window = WindUI:CreateWindow({
+        Title = "Silent Hub - Plants vs Brainrots",
+        Icon = "rbxassetid://18793032501",
+        Author = "Silent Team",
+        Folder = "SilentHub",
+        Size = isMobile and UDim2.fromOffset(480, 360) or UDim2.fromOffset(580, 460),
+        Transparent = true,
+        Theme = "Dark",
+        Resizable = true,
+        SideBarWidth = isMobile and 140 or 180,
+    })
+
+    -- Planting Tab
+    local PlantingTab = Window:Tab({
+        Title = "Planting", 
+        Icon = "leaf"
+    })
+    
+    PlantingTab:Toggle({
+        Title = "Auto Plant",
+        Desc = "Automatically plant seeds in empty plots",
+        Default = false,
+        Callback = function(state)
+            settings.autoPlant = state
+            if state then
+                autoPlant()
+            else
+                autoPlantRunning = false
+            end
+        end
+    })
+    
+    PlantingTab:Dropdown({
+        Title = "Select Seed",
+        List = PLANT_SEEDS,
+        Default = "Peashooter",
+        Callback = function(value)
+            settings.selectedSeed = value
+        end
+    })
+    
+    PlantingTab:Slider({
+        Title = "Planting Speed",
+        Step = 0.1,
+        Value = {
+            Min = 0.1,
+            Max = 5,
+            Default = 0.5,
+        },
+        Callback = function(value)
+            settings.plantingSpeed = value
+        end
+    })
+    
+    PlantingTab:Toggle({
+        Title = "Auto Harvest",
+        Desc = "Automatically harvest mature plants",
+        Default = false,
+        Callback = function(state)
+            settings.autoHarvest = state
+            if state then
+                autoHarvest()
+            else
+                autoHarvestRunning = false
+            end
+        end
+    })
+    
+    PlantingTab:Toggle({
+        Title = "Auto Buy Seeds",
+        Desc = "Automatically buy seeds when needed",
+        Default = false,
+        Callback = function(state)
+            settings.autoBuySeeds = state
+        end
+    })
+    
+    PlantingTab:Toggle({
+        Title = "Priority Planting",
+        Desc = "Plant highest value seeds first",
+        Default = true,
+        Callback = function(state)
+            settings.priorityPlant = state
+        end
+    })
+
+    -- Brainrot Management Tab
+    local BrainrotTab = Window:Tab({
+        Title = "Brainrots", 
+        Icon = "brain"
+    })
+    
+    BrainrotTab:Toggle({
+        Title = "Auto Collect Brainrots",
+        Desc = "Automatically collect defeated brainrots",
+        Default = false,
+        Callback = function(state)
+            settings.autoCollectBrainrots = state
+            if state then
+                autoCollectBrainrots()
+            else
+                autoCollectRunning = false
+            end
+        end
+    })
+    
+    BrainrotTab:Toggle({
+        Title = "Auto Place Brainrots",
+        Desc = "Automatically place brainrots in base for income",
+        Default = false,
+        Callback = function(state)
+            settings.autoPlaceBrainrots = state
+            if state then
+                autoPlaceBrainrots()
+            end
+        end
+    })
+    
+    BrainrotTab:Slider({
+        Title = "Max Brainrots in Base",
+        Step = 1,
+        Value = {
+            Min = 10,
+            Max = 100,
+            Default = 50,
+        },
+        Callback = function(value)
+            settings.maxBrainrotsInBase = value
+        end
+    })
+    
+    BrainrotTab:Dropdown({
+        Title = "Brainrot Priority",
+List = {"Highest Value", "Rarest", "Most Common", "Random"},
+        Default = "Highest Value",
+        Callback = function(value)
+            settings.brainrotPriority = value
+        end
+    })
+    
+    BrainrotTab:Toggle({
+        Title = "Auto Sell Brainrots",
+        Desc = "Automatically sell excess brainrots",
+        Default = false,
+        Callback = function(state)
+            settings.autoSellBrainrots = state
+        end
+    })
+
+    -- Fuse Machine Tab
+    local FuseTab = Window:Tab({
+        Title = "Fuse Machine", 
+        Icon = "combine"
+    })
+    
+    FuseTab:Toggle({
+        Title = "Auto Fuse",
+        Desc = "Automatically use fuse machine",
+        Default = false,
+        Callback = function(state)
+            settings.autoFuse = state
+            if state then
+                autoFuse()
+            else
+                autoFuseRunning = false
+            end
+        end
+    })
+    
+    FuseTab:Dropdown({
+        Title = "Fuse Mode",
+        List = {"All", "Common Only", "Uncommon+", "Rare+", "Epic+"},
+        Default = "All",
+        Callback = function(value)
+            settings.fuseMode = value
+        end
+    })
+    
+    FuseTab:Toggle({
+        Title = "Keep Mutations",
+        Desc = "Don't fuse mutated plants/brainrots",
+        Default = true,
+        Callback = function(state)
+            settings.keepMutations = state
+        end
+    })
+
+    -- Economy Tab
+    local EconomyTab = Window:Tab({
+        Title = "Economy", 
+        Icon = "dollar-sign"
+    })
+    
+    EconomyTab:Toggle({
+        Title = "Auto Spend Cash",
+        Desc = "Automatically spend cash on priorities",
+        Default = false,
+        Callback = function(state)
+            settings.autoSpendCash = state
+            if state then
+                autoSpendCash()
+            end
+        end
+    })
+    
+    EconomyTab:Slider({
+        Title = "Min Cash Reserve",
+        Step = 100,
+        Value = {
+            Min = 0,
+            Max = 10000,
+            Default = 1000,
+        },
+        Callback = function(value)
+            settings.minCashReserve = value
+        end
+    })
+    
+    EconomyTab:Dropdown({
+        Title = "Priority Buying",
+        List = {"Seeds", "Upgrades", "Eggs", "Garden Expansion"},
+        Default = "Seeds",
+        Callback = function(value)
+            settings.priorityBuying = value
+        end
+    })
+
+    -- Mutations Tab
+    local MutationTab = Window:Tab({
+        Title = "Mutations", 
+        Icon = "sparkles"
+    })
+    
+    MutationTab:Toggle({
+        Title = "Mutation Farming",
+        Desc = "Focus on getting mutations",
+        Default = false,
+        Callback = function(state)
+            settings.mutationFarming = state
+            if state then
+                mutationFarming()
+            end
+        end
+    })
+    
+    MutationTab:Toggle({
+        Title = "Only Keep Mutated",
+        Desc = "Sell all non-mutated plants",
+        Default = false,
+        Callback = function(state)
+            settings.onlyKeepMutated = state
+        end
+    })
+    
+    MutationTab:Dropdown({
+        Title = "Mutation Priority",
+        List = MUTATIONS,
+        Default = "Golden",
+        Callback = function(value)
+            settings.mutationPriority = value
+        end
+    })
+
+    -- Eggs & Rebirth Tab
+    local EggTab = Window:Tab({
+        Title = "Eggs & Rebirth", 
+        Icon = "egg"
+    })
+    
+    EggTab:Toggle({
+        Title = "Auto Open Eggs",
+        Desc = "Automatically buy and open eggs",
+        Default = false,
+        Callback = function(state)
+            settings.autoOpenEggs = state
+            if state then
+                autoOpenEggs()
+            end
+        end
+    })
+    
+    EggTab:Dropdown({
+        Title = "Egg Type",
+        List = EGG_TYPES,
+        Default = "Common Egg",
+        Callback = function(value)
+            settings.eggType = value
+        end
+    })
+    
+    EggTab:Toggle({
+        Title = "Auto Rebirth",
+        Desc = "Automatically rebirth when threshold is met",
+        Default = false,
+        Callback = function(state)
+            settings.autoRebirth = state
+            if state then
+                autoRebirth()
+            end
+        end
+    })
+    
+    EggTab:Slider({
+        Title = "Rebirth Threshold",
+        Step = 10,
+        Value = {
+            Min = 50,
+            Max = 1000,
+            Default = 100,
+        },
+        Callback = function(value)
+            settings.rebirthThreshold = value
+        end
+    })
+
+    -- Player Tab
+    local PlayerTab = Window:Tab({
+        Title = "Player", 
+        Icon = "user"
+    })
+    
+    PlayerTab:Slider({
+        Title = "Walk Speed",
+        Step = 1,
+        Value = {
+            Min = 1,
+            Max = 100,
+            Default = 16,
+        },
+        Callback = function(value)
+            settings.walkSpeed = value
+            startSpeedLoop()
+        end
+    })
+    
+    PlayerTab:Slider({
+        Title = "Jump Power",
+        Step = 1,
+        Value = {
+            Min = 1,
+            Max = 500,
+            Default = 50,
+        },
+        Callback = function(value)
+            settings.jumpPower = value
+            startSpeedLoop()
+        end
+    })
+    
+    PlayerTab:Toggle({
+        Title = "Fly Hack",
+        Desc = "Fly around the map",
+        Default = false,
+        Callback = function(state)
+            settings.flyHack = state
+            if state then
+                enableFly()
+            else
+                disableFly()
+            end
+        end
+    })
+    
+    PlayerTab:Toggle({
+        Title = "No Clip",
+        Desc = "Walk through walls",
+        Default = false,
+        Callback = function(state)
+            settings.noClip = state
+            if state then
+                enableNoClip()
+            else
+                disableNoClip()
+            end
+        end
+    })
+
+    -- Misc Tab
+    local MiscTab = Window:Tab({
+        Title = "Misc", 
+        Icon = "settings"
+    })
+    
+    MiscTab:Toggle({
+        Title = "Anti AFK",
+        Desc = "Prevents getting kicked for being AFK",
+        Default = false,
+        Callback = function(state)
+            settings.antiAFK = state
+            if state then
+                antiAFK()
+            else
+                if connections.antiAFK then
+                    connections.antiAFK:Disconnect()
+                    connections.antiAFK = nil
+                end
+            end
+        end
+    })
+    
+    MiscTab:Toggle({
+        Title = "Auto Clicker",
+        Desc = "Automatically clicks on clickable objects",
+        Default = false,
+        Callback = function(state)
+            settings.autoClicker = state
+            if state then
+                autoClicker()
+            else
+                if connections.autoClicker then
+                    connections.autoClicker:Disconnect()
+                    connections.autoClicker = nil
+                end
+            end
+        end
+    })
+    
+    MiscTab:Slider({
+        Title = "Click Speed",
+        Step = 1,
+        Value = {
+            Min = 1,
+            Max = 100,
+            Default = 20,
+        },
+        Callback = function(value)
+            settings.clickSpeed = value
+        end
+    })
+    
+    MiscTab:Button({
+        Title = "Rejoin Server",
+        Desc = "Rejoin current server",
+        Callback = function()
+            TeleportService:Teleport(game.PlaceId, player)
+        end
+    })
+    
+    MiscTab:Button({
+        Title = "Server Hop",
+        Desc = "Join a different server",
+        Callback = function()
+            local success, servers = pcall(function()
+                return HttpService:JSONDecode(game:HttpGet("https://games.roblox.com/v1/games/" .. game.PlaceId .. "/servers/Public?sortOrder=Asc&limit=100"))
+            end)
+            if success and servers then
+                for _, server in pairs(servers.data) do
+                    if server.playing < server.maxPlayers and server.id ~= game.JobId then
+                        TeleportService:TeleportToPlaceInstance(game.PlaceId, server.id)
+                        break
+                    end
+                end
+            end
+        end
+    })
+    
+    MiscTab:Button({
+        Title = "Copy Discord",
+        Desc = "Copy Silent Hub Discord invite",
+        Callback = function()
+            if setclipboard then
+                setclipboard("https://discord.gg/silenthub")
+                showNotification("Discord link copied!")
+            end
+        end
+    })
+
+    -- Credits Tab
+    local CreditsTab = Window:Tab({
+        Title = "Credits", 
+        Icon = "user-check"
+    })
+    
+    CreditsTab:Label({
+        Title = "Creator",
+        Desc = "Silent Team - Plants vs Brainrots Edition"
+    })
+    
+    CreditsTab:Label({
+        Title = "Version",
+        Desc = "Version: " .. SCRIPT_VERSION
+    })
+    
+    CreditsTab:Label({
+        Title = "Active Users",
+        Desc = "Current Users: " .. currentUsers
+    })
+    
+    CreditsTab:Label({
+        Title = "Discord Members",
+        Desc = "Members: " .. discordMembers
+    })
+    
+    CreditsTab:Label({
+        Title = "Player",
+        Desc = "Welcome: " .. player.Name
+    })
+
+    -- Character respawn handling
+    player.CharacterAdded:Connect(function()
+        wait(2)
+        startSpeedLoop()
+        if settings.flyHack then
+            wait(1)
+            enableFly()
+        end
+        if settings.noClip then
+            enableNoClip()
+        end
+    end)
+    
+    startSpeedLoop()
+end
+
+-- Key System
+local function createKeySystem()
+    local screenGui = Instance.new("ScreenGui")
+    screenGui.Name = "SilentHubKeySystem"
+    screenGui.Parent = player.PlayerGui
+    screenGui.ResetOnSpawn = false
+    
+    local blurEffect = Instance.new("BlurEffect")
+    blurEffect.Size = 24
+    blurEffect.Parent = Lighting
+    
+    local backgroundFrame = Instance.new("Frame")
+    backgroundFrame.Size = UDim2.new(1, 0, 1, 0)
+    backgroundFrame.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+    backgroundFrame.BackgroundTransparency = 0.3
+    backgroundFrame.BorderSizePixel = 0
+    backgroundFrame.Parent = screenGui
+    
+    local statsFrame = Instance.new("Frame")
+    statsFrame.Size = UDim2.new(0, 400, 0, 60)
+    statsFrame.Position = UDim2.new(0.5, -200, 0, 50)
+    statsFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+    statsFrame.BorderSizePixel = 0
+    statsFrame.Parent = screenGui
+    
+    local statsCorner = Instance.new("UICorner")
+    statsCorner.CornerRadius = UDim.new(0, 10)
+    statsCorner.Parent = statsFrame
+    
+    local statsLabel = Instance.new("TextLabel")
+    statsLabel.Size = UDim2.new(1, 0, 1, 0)
+    statsLabel.BackgroundTransparency = 1
+    statsLabel.Text = "Active Users: " .. currentUsers .. " | Plants vs Brainrots | Premium"
+    statsLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+    statsLabel.TextSize = 14
+    statsLabel.Font = Enum.Font.GothamBold
+    statsLabel.Parent = statsFrame
+    
+    local mainFrame = Instance.new("Frame")
+    mainFrame.Size = UDim2.new(0, 450, 0, 250)
+    mainFrame.Position = UDim2.new(0.5, -225, 0.5, -125)
+    mainFrame.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+    mainFrame.BorderSizePixel = 0
+    mainFrame.Parent = screenGui
+    
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 15)
+    corner.Parent = mainFrame
+    
+    local stroke = Instance.new("UIStroke")
+    stroke.Color = Color3.fromRGB(255, 255, 255)
+    stroke.Thickness = 2
+    stroke.Parent = mainFrame
+    
+    local headerFrame = Instance.new("Frame")
+    headerFrame.Size = UDim2.new(1, 0, 0, 60)
+    headerFrame.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+    headerFrame.BorderSizePixel = 0
+    headerFrame.Parent = mainFrame
+    
+    local headerCorner = Instance.new("UICorner")
+    headerCorner.CornerRadius = UDim.new(0, 15)
+    headerCorner.Parent = headerFrame
+    
+    local title = Instance.new("TextLabel")
+    title.Size = UDim2.new(0.6, 0, 0, 35)
+    title.Position = UDim2.new(0, 20, 0, 5)
+    title.BackgroundTransparency = 1
+    title.Text = "Silent Hub - Plants vs Brainrots"
+    title.TextColor3 = Color3.fromRGB(255, 255, 255)
+    title.TextSize = 18
+    title.Font = Enum.Font.GothamBold
+    title.TextXAlignment = Enum.TextXAlignment.Left
+    title.Parent = headerFrame
+    
+    local subtitle = Instance.new("TextLabel")
+    subtitle.Size = UDim2.new(0.6, 0, 0, 20)
+    subtitle.Position = UDim2.new(0, 20, 0, 35)
+    subtitle.BackgroundTransparency = 1
+    subtitle.Text = "Brainrot Farming Script v" .. SCRIPT_VERSION
+    subtitle.TextColor3 = Color3.fromRGB(255, 255, 255)
+    subtitle.TextSize = 12
+    subtitle.Font = Enum.Font.Gotham
+    subtitle.TextXAlignment = Enum.TextXAlignment.Left
+    subtitle.Parent = headerFrame
+    
+    local keySystemLabel = Instance.new("TextLabel")
+    keySystemLabel.Size = UDim2.new(0.35, 0, 0, 25)
+    keySystemLabel.Position = UDim2.new(0.4, 0, 0, 17)
+    keySystemLabel.BackgroundTransparency = 1
+    keySystemLabel.Text = "< KEY SYSTEM >"
+    keySystemLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+    keySystemLabel.TextSize = 14
+    keySystemLabel.Font = Enum.Font.Gotham
+    keySystemLabel.Parent = headerFrame
+    
+    local iconImage = Instance.new("ImageLabel")
+    iconImage.Size = UDim2.new(0, 40, 0, 40)
+    iconImage.Position = UDim2.new(1, -60, 0, 10)
+    iconImage.BackgroundTransparency = 1
+    iconImage.Image = "rbxassetid://18793032501"
+    iconImage.Parent = headerFrame
+    
+    local iconCorner = Instance.new("UICorner")
+    iconCorner.CornerRadius = UDim.new(0, 8)
+    iconCorner.Parent = iconImage
+    
+    local contentFrame = Instance.new("Frame")
+    contentFrame.Size = UDim2.new(1, -40, 1, -80)
+    contentFrame.Position = UDim2.new(0, 20, 0, 70)
+    contentFrame.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+    contentFrame.BorderSizePixel = 0
+    contentFrame.Parent = mainFrame
+    
+    local contentCorner = Instance.new("UICorner")
+    contentCorner.CornerRadius = UDim.new(0, 10)
+    contentCorner.Parent = contentFrame
+    
+    local contentStroke = Instance.new("UIStroke")
+    contentStroke.Color = Color3.fromRGB(255, 255, 255)
+    contentStroke.Thickness = 1
+    contentStroke.Parent = contentFrame
+    
+    local inputLabel = Instance.new("TextLabel")
+    inputLabel.Size = UDim2.new(1, 0, 0, 25)
+    inputLabel.Position = UDim2.new(0, 10, 0, 10)
+    inputLabel.BackgroundTransparency = 1
+    inputLabel.Text = "KEY SYSTEM INPUT"
+    inputLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+    inputLabel.TextSize = 16
+    inputLabel.Font = Enum.Font.GothamBold
+    inputLabel.TextXAlignment = Enum.TextXAlignment.Left
+    inputLabel.Parent = contentFrame
+    
+    local keyInput = Instance.new("TextBox")
+    keyInput.Size = UDim2.new(1, -20, 0, 30)
+    keyInput.Position = UDim2.new(0, 10, 0, 45)
+    keyInput.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    keyInput.Text = ""
+    keyInput.PlaceholderText = "Enter key here..."
+    keyInput.PlaceholderColor3 = Color3.fromRGB(120, 120, 120)
+    keyInput.TextSize = 12
+    keyInput.Font = Enum.Font.Gotham
+    keyInput.TextColor3 = Color3.fromRGB(0, 0, 0)
+    keyInput.Parent = contentFrame
+    
+    local keyCorner = Instance.new("UICorner")
+    keyCorner.CornerRadius = UDim.new(0, 5)
+    keyCorner.Parent = keyInput
+    
+    local getKeyButton = Instance.new("TextButton")
+    getKeyButton.Size = UDim2.new(0, 170, 0, 35)
+    getKeyButton.Position = UDim2.new(0, 10, 0, 90)
+    getKeyButton.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    getKeyButton.Text = "GET KEY"
+    getKeyButton.TextColor3 = Color3.fromRGB(0, 0, 0)
+    getKeyButton.TextSize = 12
+    getKeyButton.Font = Enum.Font.GothamBold
+    getKeyButton.Parent = contentFrame
+    
+    local getKeyCorner = Instance.new("UICorner")
+    getKeyCorner.CornerRadius = UDim.new(0, 6)
+    getKeyCorner.Parent = getKeyButton
+    
+    local submitButton = Instance.new("TextButton")
+    submitButton.Size = UDim2.new(0, 170, 0, 35)
+    submitButton.Position = UDim2.new(0, 220, 0, 90)
+    submitButton.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    submitButton.Text = "SUBMIT KEY"
+    submitButton.TextColor3 = Color3.fromRGB(0, 0, 0)
+    submitButton.TextSize = 12
+    submitButton.Font = Enum.Font.GothamBold
+    submitButton.Parent = contentFrame
+    
+    local submitCorner = Instance.new("UICorner")
+    submitCorner.CornerRadius = UDim.new(0, 6)
+    submitCorner.Parent = submitButton
+    
+    local madeByLabel = Instance.new("TextLabel")
+    madeByLabel.Size = UDim2.new(1, 0, 0, 20)
+    madeByLabel.Position = UDim2.new(0, 0, 1, -30)
+    madeByLabel.BackgroundTransparency = 1
+    madeByLabel.Text = "By Silent Team"
+    madeByLabel.TextColor3 = Color3.fromRGB(255, 215, 0)
+    madeByLabel.TextSize = 14
+    madeByLabel.Font = Enum.Font.Gotham
+    madeByLabel.Parent = mainFrame
+
+    submitButton.MouseButton1Click:Connect(function()
+        keyAttempts = keyAttempts + 1
+        
+        if keyAttempts > maxAttempts then
+            bannedUsers[player.UserId] = true
+            player:Kick("Too many invalid key attempts. You are banned from using this script.")
+            return
+        end
+        
+        if keyInput.Text:lower() == REQUIRED_KEY:lower() then
+            keyAttempts = 0
+            saveKey()
+            playSuccessSound()
+            screenGui:Destroy()
+            blurEffect:Destroy()
+            createMainHub()
+            
+            showNotification("Script loaded successfully! Ready to farm brainrots!")
+        else
+            inputLabel.Text = "INVALID KEY! Attempts: " .. keyAttempts .. "/" .. maxAttempts
+            inputLabel.TextColor3 = Color3.fromRGB(255, 100, 100)
+            wait(2)
+            inputLabel.Text = "KEY SYSTEM INPUT"
+            inputLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+        end
+    end)
+
+    getKeyButton.MouseButton1Click:Connect(function()
+        if setclipboard then
+            setclipboard("https://discord.gg/silenthub")
+            inputLabel.Text = "Discord link copied!"
+            inputLabel.TextColor3 = Color3.fromRGB(0, 255, 0)
+        else
+            inputLabel.Text = "Visit: discord.gg/silenthub"
+            inputLabel.TextColor3 = Color3.fromRGB(255, 255, 0)
+        end
+        
+        wait(3)
+        inputLabel.Text = "KEY SYSTEM INPUT"
+        inputLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+    end)
+
+    keyInput.FocusLost:Connect(function(enterPressed)
+        if enterPressed then
+            submitButton.MouseButton1Click:Fire()
+        end
+    end)
+end
+
+-- Main execution
+if bannedUsers[player.UserId] then
+    player:Kick("You are banned from using this script due to key system abuse.")
+    return
+end
+
+if isKeySaved() then
+    createMainHub()
+else
+    createKeySystem()
+end
